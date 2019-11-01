@@ -103,27 +103,17 @@ public class RedisInfoController {
         // get our connection info from VCAP_SERVICES
         RedisInstanceInfo info = getInfo();
         pool = new JedisPool(new JedisPoolConfig(), info.getHost(), info.getPort(), Protocol.DEFAULT_TIMEOUT, info.getPassword());
-        
-//        Jedis jedis = new Jedis(info.getHost(), info.getPort());
-//        
-//        // make the connection
-//        jedis.connect();
-//
-//        // authorize with our password
-//        jedis.auth(info.getPassword());
-        
-        //return pool;
     }
     
     @RequestMapping("/start/{key}")
     void startLoadTest(@PathVariable(value="key") String key) throws InterruptedException {
-    	_continue = true;
+	_continue = true;
     	pool.getResource();
+	String value = "";
     	while(_continue) {
-    		String value = "";
-    		try
+	    try
             {
-    			jedis = pool.getResource();
+    		jedis = pool.getResource();
                 value = jedis.get(key);
             }
             catch (JedisConnectionException e)
@@ -135,9 +125,8 @@ public class RedisInfoController {
             {
                 jedis.close();
             }
-    		//String value = getKey(key);
-    		LOG.log(Level.INFO, "Got the value from Redis: " + value);
-    		Thread.sleep(50);
+    	    LOG.log(Level.INFO, "Got the value from Redis: " + value);
+    	    Thread.sleep(50);
     	}
     }
     
