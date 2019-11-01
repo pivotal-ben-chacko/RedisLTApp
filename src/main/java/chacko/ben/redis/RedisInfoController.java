@@ -14,15 +14,20 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.Protocol;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 @RestController
 public class RedisInfoController {
 	private Logger LOG = Logger.getLogger(RedisInfoController.class.getName());
     private Jedis jedis = null;
-    
+    private JedisPool pool = null;
     private boolean _continue = false;
     
-    @RequestMapping("/info")
+    @SuppressWarnings("deprecation")
+	@RequestMapping("/info")
     public RedisInstanceInfo getInfo() {
         LOG.log(Level.WARNING, "Getting Redis Instance Info in Spring controller...");
         // first we need to get the value of VCAP_SERVICES, the environment variable
@@ -68,7 +73,8 @@ public class RedisInfoController {
         LOG.log(Level.WARNING, "Called the key set method, going to set key: " + key + " to val: " + val);
 
         if (jedis == null || !jedis.isConnected()) {
-            jedis = getJedisConnection();
+            getJedisConnection();
+            jedis = pool.getResource();
         }
         jedis.set(key, val);
 
@@ -80,7 +86,8 @@ public class RedisInfoController {
         LOG.log(Level.INFO, "Called the key get method, going to return val for key: " + key);
 
         if (jedis == null || !jedis.isConnected()) {
-            jedis = getJedisConnection();
+            getJedisConnection();
+            jedis = pool.getResource();
         }
 
         return jedis.get(key);
@@ -92,27 +99,34 @@ public class RedisInfoController {
         System.exit(0);
     }
 
-    private Jedis getJedisConnection() {
+    private void getJedisConnection() {
         // get our connection info from VCAP_SERVICES
         RedisInstanceInfo info = getInfo();
-        Jedis jedis = new Jedis(info.getHost(), info.getPort());
-        
-        // make the connection
-        jedis.connect();
-
-        // authorize with our password
-        jedis.auth(info.getPassword());
-
-        return jedis;
+        pool = new JedisPool(new JedisPoolConfig(), info.getHost(), info.getPort(), Protocol.DEFAULT_TIMEOUT, info.getPassword());
     }
     
     @RequestMapping("/start/{key}")
     void startLoadTest(@PathVariable(value="key") String key) throws InterruptedException {
-    	_continue = true;
+	_continue = true;
+    	pool.getResource();
+	String value = "";
     	while(_continue) {
-    		String value = getKey(key);
-    		LOG.log(Level.INFO, "Got the value from Redis: " + value);
-    		Thread.sleep(50);
+	    try
+            {
+    		jedis = pool.getResource();
+                value = jedis.get(key);
+            }
+            catch (JedisConnectionException e)
+            {
+                
+            	LOG.log(Level.WARNING, "About to kill the service!");
+            }
+            finally
+            {
+                jedis.close();
+            }
+    	    LOG.log(Level.INFO, "Got the value from Redis: " + value);
+    	    Thread.sleep(50);
     	}
     }
     
