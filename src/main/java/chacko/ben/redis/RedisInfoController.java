@@ -75,8 +75,9 @@ public class RedisInfoController {
         LOG.log(Level.WARNING, "Called the key set method, going to set key: " + key + " to val: " + val);
         pool = getJedisPoolInstance();
         jedis = pool.getResource();
+        
         jedis.set(key, val);
-
+        jedis.close();
         return "Set key: " + key + " to value: " + val;
     }
 
@@ -85,7 +86,9 @@ public class RedisInfoController {
         LOG.log(Level.INFO, "Called the key get method, going to return val for key: " + key);
         pool = getJedisPoolInstance();
         jedis = pool.getResource();
-        return jedis.get(key);
+        String value = jedis.get(key);
+        jedis.close();
+        return value;
     }
 
     @RequestMapping("/kill") 
