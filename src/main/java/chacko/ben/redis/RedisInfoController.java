@@ -17,7 +17,6 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Protocol;
-import redis.clients.jedis.exceptions.JedisConnectionException;
 
 @RestController
 public class RedisInfoController {
@@ -112,31 +111,19 @@ public class RedisInfoController {
         return pool;
     }
     
-    @RequestMapping("/start/{key}")
-    void startLoadTest(@PathVariable(value="key") String key) throws InterruptedException {
-    	_continue = true;
-    	pool = getJedisPoolInstance();
-    	String value = "";
-    	while(_continue) {
-    	    try
-            {
-    		jedis = pool.getResource();
-                value = jedis.get(key);
-            }
-            catch (JedisConnectionException e)
-            {
-                
-            	LOG.log(Level.WARNING, "About to kill the service!");
-            }
-            finally
-            {
-                jedis.close();
-            }
-    		//String value = getKey(key);
-    		LOG.log(Level.INFO, "Got the value from Redis: " + value);
-    		Thread.sleep(50);
-    	}
-    }
+	@RequestMapping("/start/{key}")
+	void startLoadTest(@PathVariable(value = "key") String key) throws InterruptedException {
+		_continue = true;
+		pool = getJedisPoolInstance();
+		String value = "";
+		while (_continue) {
+			jedis = pool.getResource();
+			value = jedis.get(key);
+			jedis.close();
+			LOG.log(Level.INFO, "Got the value from Redis: " + value);
+			Thread.sleep(50);
+		}
+	}
     
     @RequestMapping("/stop")
     void stopLoadTest() {
