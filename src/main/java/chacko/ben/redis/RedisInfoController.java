@@ -21,10 +21,12 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 @RestController
 public class RedisInfoController {
-	private Logger LOG = Logger.getLogger(RedisInfoController.class.getName());
+    private Logger LOG = Logger.getLogger(RedisInfoController.class.getName());
     private Jedis jedis = null;
     private JedisPool pool = null;
     private boolean _continue = false;
+    //private boolean _lock = false;
+    Object _lock = new Object();
     
     @SuppressWarnings("deprecation")
 	@RequestMapping("/info")
@@ -71,11 +73,8 @@ public class RedisInfoController {
     @RequestMapping(value = "/set", method = RequestMethod.POST) 
     public String setKey(@RequestParam("kn") String key, @RequestParam("kv") String val) {
         LOG.log(Level.WARNING, "Called the key set method, going to set key: " + key + " to val: " + val);
-
-        if (jedis == null || !jedis.isConnected()) {
-            getJedisConnection();
-            jedis = pool.getResource();
-        }
+        pool = getJedisPoolInstance();
+        jedis = pool.getResource();
         jedis.set(key, val);
 
         return "Set key: " + key + " to value: " + val;
@@ -84,12 +83,8 @@ public class RedisInfoController {
     @RequestMapping("/get")
     String getKey(@RequestParam("kn") String key) {
         LOG.log(Level.INFO, "Called the key get method, going to return val for key: " + key);
-
-        if (jedis == null || !jedis.isConnected()) {
-            getJedisConnection();
-            jedis = pool.getResource();
-        }
-
+        pool = getJedisPoolInstance();
+        jedis = pool.getResource();
         return jedis.get(key);
     }
 
@@ -99,19 +94,28 @@ public class RedisInfoController {
         System.exit(0);
     }
 
-    private void getJedisConnection() {
-        // get our connection info from VCAP_SERVICES
-        RedisInstanceInfo info = getInfo();
-        pool = new JedisPool(new JedisPoolConfig(), info.getHost(), info.getPort(), Protocol.DEFAULT_TIMEOUT, info.getPassword());
+    
+    private JedisPool getJedisPoolInstance() {
+    	
+        if (pool == null) {
+            synchronized (_lock) {
+                if (pool == null) {
+                    RedisInstanceInfo info = getInfo();
+                    pool = new JedisPool(new JedisPoolConfig(), info.getHost(), info.getPort(),
+                            Protocol.DEFAULT_TIMEOUT, info.getPassword());
+                }
+            }
+        }
+        return pool;
     }
     
     @RequestMapping("/start/{key}")
     void startLoadTest(@PathVariable(value="key") String key) throws InterruptedException {
-	_continue = true;
-    	pool.getResource();
-	String value = "";
+    	_continue = true;
+    	pool = getJedisPoolInstance();
+    	String value = "";
     	while(_continue) {
-	    try
+    	    try
             {
     		jedis = pool.getResource();
                 value = jedis.get(key);
@@ -125,8 +129,9 @@ public class RedisInfoController {
             {
                 jedis.close();
             }
-    	    LOG.log(Level.INFO, "Got the value from Redis: " + value);
-    	    Thread.sleep(50);
+    		//String value = getKey(key);
+    		LOG.log(Level.INFO, "Got the value from Redis: " + value);
+    		Thread.sleep(50);
     	}
     }
     
